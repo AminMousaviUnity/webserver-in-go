@@ -3,76 +3,110 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strconv"
 )
 
-// MyHandler is a custom HTTP handler that implements the http.Handler interface
-type MyHandler struct{}
-
-func (h *MyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "This is a custom handler called MyHandler!")
+// Mock in-memory data
+var resources = []map[string]interface{} {
+	{"id": 1, "name": "Resource 1"},
+	{"id": 2, "name": "Resource 2"},
 }
 
-// RequestInfoHandler handles requests and displays request information
-func RequestInfoHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-
-	// Display request details
-	fmt.Fprintf(w, "Method: %s\n", r.Method)
-	fmt.Fprintf(w, "URL: %s\n", r.URL)
-	fmt.Fprintf(w, "Header: %v\n", r.Header)
-	fmt.Fprintf(w, "Content-Type: %s\n", r.Header.Get("Content-Type"))
-
-	// Read and safely close the request body
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+// POST: Add a new resource
+// Testing with: `curl -X POST -H "Content-Type: application/json" -d '{"name":"New Resource"}' http://localhost:8080/resources/add`
+func AddResourceHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
-	defer r.Body.Close()
-	fmt.Fprintf(w, "Body: %s\n", body)
 
-	// Parse and display form data
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+	var newResource map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&newResource); err != nil {
+		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintf(w, "Form: %v\n", r.Form)
-	fmt.Fprintf(w, "Form value 'name': %s\n", r.Form.Get("name"))
+
+	// Add the new resource with an incremented ID
+	newResource["id"] = len(resources) + 1
+	resources = append(resources, newResource)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(newResource)
 }
 
-// ResponseInfoHandler sends a JSON response
-func ResponseInfoHandler(w http.ResponseWriter, r *http.Request) {
+// PUT: Update an existing resource
+// Testing with: `curl -X PUT -H "Content-Type: application/json" -d '{"name":"Updated Resource"}' "http://localhost:8080/resources/update?id=1"`
+func UpdateResourceHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idStr := r.URL.Query().Get("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id < 1 || id > len(resources) {
+		http.Error(w, "Invalid resource ID", http.StatusBadRequest)
+		return
+	}
+
+	var updatedResource map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updatedResource); err != nil {
+		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Update the resource in memory
+	updatedResource["id"] = id
+	resources[id-1] = updatedResource
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(updatedResource)
+}
 
-	// Prepare a response map and encode it as JSON
-	response := map[string]interface{} {
-		"status": "success",
-		"message": "Hello, world!",
+
+// DELETE: Remove a resource
+// Testing with: `curl -X DELETE "http://localhost:8080/resources/delete?id=2"`
+func DeleteResourceHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
 	}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+
+	idStr := r.URL.Query().Get("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id < 1 || id > len(resources) {
+		http.Error(w, "Invalid resource ID", http.StatusBadRequest)
+		return
 	}
+
+	// Remove the resource from the slice
+	resources = append(resources[:id-1], resources[id:]...)
+
+	w.WriteHeader(http.StatusNoContent) // No Content response
+}
+
+// Get: Retrieve all resources
+// Testing with: "curl -X GET http://localhost:8080/resources"
+func GetResourcesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resources)
 }
 
 func main() {
-	// Root route
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello World!")
-	})
+	// GET: Retrieve all resources
+	http.HandleFunc("/resources", GetResourcesHandler)
 
-	// Custom handler
-	handler := &MyHandler{}
-	http.Handle("/customHandler", handler)
-	
-	// Request info handler
-	http.HandleFunc("/req-info", RequestInfoHandler)
+	// POST: Add a new resource
+	http.HandleFunc("/resources/add", AddResourceHandler)
 
-	// Response info handler
-	http.HandleFunc("/res-info", ResponseInfoHandler)
+	// PUT: Update an existing resource
+	http.HandleFunc("/resources/update", UpdateResourceHandler)
+
+	// DELETE: Remove a resource
+	http.HandleFunc("/resources/delete", DeleteResourceHandler)
 
 	// Start the server
 	addr := ":8080"
@@ -81,4 +115,3 @@ func main() {
 		fmt.Printf("Server failed: %s", err)
 	}
 }
-
