@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,6 +30,17 @@ func req_info_handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Form value 'name': %s\n", r.Form.Get("name"))
 }
 
+func res_info_handler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	response := map[string]interface{} {
+		"status": "success",
+		"message": "Hello, world!",
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
 func main() {
 	// Using HandleFunc for root address
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -42,9 +54,11 @@ func main() {
 	handler := &MyHandler{}
 	http.Handle("/customHandler", handler)
 	
-
 	// Request info handler
 	http.HandleFunc("/req-info", req_info_handler)
+
+	// Response info handler
+	http.HandleFunc("/res-info", res_info_handler)
 
 	http.ListenAndServe(":8080", nil)
 }
