@@ -7,59 +7,78 @@ import (
 	"net/http"
 )
 
+// MyHandler is a custom HTTP handler that implements the http.Handler interface
 type MyHandler struct{}
 
 func (h *MyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "This is a custom handler called MyHandler!")
 }
 
-func req_info_handler(w http.ResponseWriter, r *http.Request) {
+// RequestInfoHandler handles requests and displays request information
+func RequestInfoHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+
+	// Display request details
 	fmt.Fprintf(w, "Method: %s\n", r.Method)
 	fmt.Fprintf(w, "URL: %s\n", r.URL)
 	fmt.Fprintf(w, "Header: %v\n", r.Header)
 	fmt.Fprintf(w, "Content-Type: %s\n", r.Header.Get("Content-Type"))
 
-	// Read and close the request body
-	body, _ := io.ReadAll(r.Body)
-	r.Body.Close()
+	// Read and safely close the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
 	fmt.Fprintf(w, "Body: %s\n", body)
 
-	// Parse and access form data
-	r.ParseForm()
+	// Parse and display form data
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+		return
+	}
 	fmt.Fprintf(w, "Form: %v\n", r.Form)
 	fmt.Fprintf(w, "Form value 'name': %s\n", r.Form.Get("name"))
 }
 
-func res_info_handler(w http.ResponseWriter, r *http.Request) {
+// ResponseInfoHandler sends a JSON response
+func ResponseInfoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
+	// Prepare a response map and encode it as JSON
 	response := map[string]interface{} {
 		"status": "success",
 		"message": "Hello, world!",
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+	}
 }
 
 func main() {
-	// Using HandleFunc for root address
+	// Root route
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello World!")
 	})
 
-	// Use a CustomHandler which implements the ServeHTTP interface:
-	// type Handler interface {
-	// 	ServeHTTP(ResponseWriter, *Request)
-	// }
+	// Custom handler
 	handler := &MyHandler{}
 	http.Handle("/customHandler", handler)
 	
 	// Request info handler
-	http.HandleFunc("/req-info", req_info_handler)
+	http.HandleFunc("/req-info", RequestInfoHandler)
 
 	// Response info handler
-	http.HandleFunc("/res-info", res_info_handler)
+	http.HandleFunc("/res-info", ResponseInfoHandler)
 
-	http.ListenAndServe(":8080", nil)
+	// Start the server
+	addr := ":8080"
+	fmt.Printf("Starting server on %s...\n", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		fmt.Printf("Server failed: %s", err)
+	}
 }
 
