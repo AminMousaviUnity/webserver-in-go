@@ -58,12 +58,7 @@ project/
 
 ### **1. Prerequisites**
 - GoLang installed (version 1.17+)
-  - Install from [GoLang Downloads](https://go.dev/dl/).
 - SQLite installed
-  - Install with:
-    - **Linux**: `sudo apt install sqlite3`
-    - **MacOS**: `brew install sqlite`
-    - **Windows**: Download from [sqlite.org](https://sqlite.org/download.html).
 
 ---
 
